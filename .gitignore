@@ -1,7 +1,8 @@
 .tmp/
 .librarian
 Puppetfile.lock
-#modules/
+!modules/puppetmaster
+modules/*
 
 # vim backups
 *swp
