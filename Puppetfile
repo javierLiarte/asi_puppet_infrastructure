@@ -3,6 +3,9 @@
 
 forge "http://forge.puppetlabs.com"
 
+mod 'puppetlabs/stdlib'
+mod 'puppetlabs/mysql'
+
 # mod 'puppetlabs/stdlib'
 
 # mod 'ntp',

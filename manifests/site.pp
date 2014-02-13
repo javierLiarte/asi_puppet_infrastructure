@@ -11,3 +11,6 @@
 # Import node definitions:
 import 'nodes/*.pp'
 
+node default {
+#    include standard
+}

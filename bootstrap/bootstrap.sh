@@ -34,6 +34,12 @@ ${ECHO} "${cc_blue} Please contribute!${cc_normal}"
 ${ECHO} "${cc_blue}#####################################################${cc_normal}"
 ${ECHO}
 
+# Check root is running the script
+if [ "$EUID" -ne "0" ]; then
+  echo "This script must be run as root." >&2
+  exit 1
+fi
+
 # Some global system variables
 ISSUE="/etc/issue" # For OS and version detection
 
@@ -49,6 +55,8 @@ TEMPPUPPETDIR="puppet"
 VERBOSE=0
 CURRENT_DATE=`${DATE}`
 INITIAL_TIME=`${DATE} +"%s"`
+
+################ Function definition section ############
 
 # Define correct usage
 usage ()
@@ -72,70 +80,68 @@ usage ()
   exit 1
 }
 
-# Check root is running the script
-if [ "$EUID" -ne "0" ]; then
-  echo "This script must be run as root." >&2
-  exit 1
-fi
-
 # Check the parameters
-while [ $# -gt 0 ]; do
-  case "${1}" in
-    --os)
-      if [ -n "${2}" ]; then
-        OS=${2}
-        shift
-      else
+check_params_validity () {
+  while [ $# -gt 0 ]; do
+    case "${1}" in
+      --os)
+        if [ -n "${2}" ]; then
+          OS=${2}
+          shift
+        else
+          usage
+        fi
+        ;;
+      --osversion)
+        if [ -n "${2}" ]; then
+          OSVERSION=${2}
+          shift
+        else
+          usage
+        fi
+        ;;
+      --verbose)
+        if [ -n "${2}" ]; then
+          VERBOSE=${2}
+          shift
+        else
+          usage
+        fi
+        ;;
+      --logdir)
+        if [ -n "${2}" ]; then
+          LOGDIR=${2}
+          shift
+        else
+          usage
+        fi
+        ;;
+      --logfile)
+        if [ -n "${2}" ]; then
+          LOGFILE=${2}
+          shift
+        else
+          usage
+        fi
+        ;;
+      --help)
         usage
-      fi
-      ;;
-    --osversion)
-      if [ -n "${2}" ]; then
-        OSVERSION=${2}
-        shift
-      else
+        exit 0
+        ;;
+      *)
         usage
-      fi
-      ;;
-    --verbose)
-      if [ -n "${2}" ]; then
-        VERBOSE=${2}
-        shift
-      else
-        usage
-      fi
-      ;;
-    --logdir)
-      if [ -n "${2}" ]; then
-        LOGDIR=${2}
-        shift
-      else
-        usage
-      fi
-      ;;
-    --logfile)
-      if [ -n "${2}" ]; then
-        LOGFILE=${2}
-        shift
-      else
-        usage
-      fi
-      ;;
-    --help)
-      usage
-      exit 0
-      ;;
-    *)
-      usage
-      ;;
-  esac
-  shift
-done
+        ;;
+    esac
+    shift
+  done
+}
 
 # Initialize log
-touch ${LOG}
-${ECHO} "${CURRENT_DATE}" > ${LOG}
-${ECHO} >> ${LOG}
+init_log () {
+  touch ${LOG}
+  ${ECHO} "${CURRENT_DATE}" > ${LOG}
+  ${ECHO} >> ${LOG}
+}
 
 calculate_exec_time ()
 {
@@ -173,6 +179,7 @@ eval_issue_os ()
   fi
   return 1
 }
+
 # Evaluate the /etc/issue file to automatically extract OS version
 eval_issue_osversion ()
 {
@@ -206,7 +213,6 @@ eval_issue_osversion ()
   fi
   return 1
 }
-
 
 # Make sure we have a valid OS
 eval_os ()
@@ -289,178 +295,184 @@ eval_osversion ()
 }
 
 # Grab information from /etc/issue
-if [ ! -z "$CAT}" ]; then
-  if [ -e "${ISSUE}" ]; then
-    TEMPOS=`${CAT} ${ISSUE}`
-    if [ ${VERBOSE} -gt 1 ]; then
-      ${ECHO} "${cc_yellow}TEMPOS:${cc_green}${TEMPOS}${cc_normal}" | ${TEE} ${LOG}
+parse_issue_for_OS_info() {
+  if [ ! -z "$CAT}" ]; then
+    if [ -e "${ISSUE}" ]; then
+      TEMPOS=`${CAT} ${ISSUE}`
+      if [ ${VERBOSE} -gt 1 ]; then
+        ${ECHO} "${cc_yellow}TEMPOS:${cc_green}${TEMPOS}${cc_normal}" | ${TEE} ${LOG}
+      fi
+    else
+      if [ ${VERBOSE} -gt 0 ]; then
+        ${ECHO} "${cc_red}Could not find '${cc_yellow}${ISSUE}${cc_red}' file${cc_normal}" | ${TEE} ${LOG}
+      fi
     fi
   else
     if [ ${VERBOSE} -gt 0 ]; then
-      ${ECHO} "${cc_red}Could not find '${cc_yellow}${ISSUE}${cc_red}' file${cc_normal}" | ${TEE} ${LOG}
+      ${ECHO} "${cc_red}Could not find '${cc_yellow}cat${cc_red}' executable${cc_normal}" | ${TEE} ${LOG}
     fi
   fi
-else
-  if [ ${VERBOSE} -gt 0 ]; then
-    ${ECHO} "${cc_red}Could not find '${cc_yellow}cat${cc_red}' executable${cc_normal}" | ${TEE} ${LOG}
-  fi
-fi
+}
 
 # Make sure we have all answers. Otherwise ask the user for input on missing information
-if [ -z "${OS}" ]; then
-  foundos=0
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}OS not found${cc_normal}" | ${TEE} ${LOG}
-  fi
-  eval_issue_os ${TEMPOS}
-  foundos=$?
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}foundos:${cc_green}${foundos}${cc_normal}" | ${TEE} ${LOG}
-  fi
-else
-  foundos=1
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_green}OS found${cc_normal}" | ${TEE} ${LOG}
-  fi
-fi
-if [ ${foundos} -eq 1 ]; then
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_green}foundos is true${cc_normal}" | ${TEE} ${LOG}
-  fi
-  eval_os ${OS}
-  validos=$?
-  if [ ${validos} -eq 0 ]; then
-    if [ ${VERBOSE} -gt 1 ]; then
-      ${ECHO} "${cc_red}invalid OS found: ${cc_yellow}${OS}${cc_normal}" | ${TEE} ${LOG}
-    fi
+get_missing_params() {
+  if [ -z "${OS}" ]; then
     foundos=0
-  fi
-fi
-if [ ${foundos} -eq 0 ]; then
-  ${ECHO} " ${cc_blue}Please provide a valid OS (Distribution) for this script." | ${TEE} ${LOG}
-  ${ECHO} " Valid Distributions are:" | ${TEE} ${LOG}
-  ${ECHO} | ${TEE} ${LOG}
-  ${ECHO} "  * ${cc_yellow}Ubuntu${cc_blue}" | ${TEE} ${LOG}
-  ${ECHO} "  * ${cc_yellow}CentOS${cc_normal}" | ${TEE} ${LOG}
-  ${ECHO} | ${TEE} ${LOG}
-  ${ECHO} -n " > " | ${TEE} ${LOG}
-  read replyos
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}replyos: ${cc_green}${replyos}${cc_normal}" | ${TEE} ${LOG}
-  fi
-  if [ -z "${replyos}" ]; then
-    ${ECHO} "${cc_red}No valid OS was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
-    exit 1
-  else
-    OS=${replyos}
-  fi
-  eval_os ${OS}
-  validos=$?
-  if [ ${validos} -eq 0 ]; then
-    ${ECHO} "${cc_red}No valid OS was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
-    exit 1
-  fi
-fi
-if [ -z "${OSVERSION}" ]; then
-  foundosversion=0
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}OS version not found${cc_normal}" | ${TEE} ${LOG}
-  fi
-  eval_issue_osversion ${TEMPOS}
-  foundosversion=$?
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}foundosversion: ${cc_green}${foundosversion}${cc_normal}" | ${TEE} ${LOG}
-  fi
-else
-  foundosversion=1
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_green}OS version found: ${foundosversion}${cc_normal}" | ${TEE} ${LOG}
-  fi
-fi
-if [ ${foundosversion} -eq 1 ]; then
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_green}foundosversion is true${cc_normal}" | ${TEE} ${LOG}
-  fi
-  eval_osversion ${OS}
-  validosversion=$?
-  if [ ${validosversion} -eq 0 ]; then
     if [ ${VERBOSE} -gt 1 ]; then
-      ${ECHO} "${cc_red}invalid OS found: ${cc_yellow}${OSVERSION}${cc_normal}" | ${TEE} ${LOG}
+      ${ECHO} "${cc_yellow}OS not found${cc_normal}" | ${TEE} ${LOG}
     fi
-    foundosversion=0
-  fi
-fi
-if [ ${foundosversion} -eq 0 ]; then
-  ${ECHO} " ${cc_blue}Please provide a valid OS Version for ${OS} for this script." | ${TEE} ${LOG}
-  ${ECHO} " Valid Versions are:" | ${TEE} ${LOG}
-  ${ECHO} | ${TEE} ${LOG}
-  case ${OS} in
-    ubuntu)
-      ${ECHO} "  * ${cc_yellow}12.04${cc_blue}" | ${TEE} ${LOG}
-      ;;
-    centos)
-      ${ECHO} "  * ${cc_yellow}6${cc_normal}" | ${TEE} ${LOG}
-      ;;
-  esac
-  ${ECHO} | ${TEE} ${LOG}
-  ${ECHO} -n " > " | ${TEE} ${LOG}
-  read replyosversion
-  if [ ${VERBOSE} -gt 1 ]; then
-    ${ECHO} "${cc_yellow}replyosversion: ${cc_green}${replyosversion}${cc_normal}" | ${TEE} ${LOG}
-  fi
-  if [ -z "${replyosversion}" ]; then
-    ${ECHO} "${cc_red}No valid OS version was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
-    exit 1
+    eval_issue_os ${TEMPOS}
+    foundos=$?
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_yellow}foundos:${cc_green}${foundos}${cc_normal}" | ${TEE} ${LOG}
+    fi
   else
-    OSVERSION=${replyosversion}
+    foundos=1
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_green}OS found${cc_normal}" | ${TEE} ${LOG}
+    fi
   fi
-  eval_osversion ${OSVERSION}
-  validosversion=$?
-  if [ ${validosversion} -eq 0 ]; then
-    ${ECHO} "${cc_red}No valid OS version was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
-    exit 1
+  if [ ${foundos} -eq 1 ]; then
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_green}foundos is true${cc_normal}" | ${TEE} ${LOG}
+    fi
+    eval_os ${OS}
+    validos=$?
+    if [ ${validos} -eq 0 ]; then
+      if [ ${VERBOSE} -gt 1 ]; then
+        ${ECHO} "${cc_red}invalid OS found: ${cc_yellow}${OS}${cc_normal}" | ${TEE} ${LOG}
+      fi
+      foundos=0
+    fi
   fi
-fi
+  if [ ${foundos} -eq 0 ]; then
+    ${ECHO} " ${cc_blue}Please provide a valid OS (Distribution) for this script." | ${TEE} ${LOG}
+    ${ECHO} " Valid Distributions are:" | ${TEE} ${LOG}
+    ${ECHO} | ${TEE} ${LOG}
+    ${ECHO} "  * ${cc_yellow}Ubuntu${cc_blue}" | ${TEE} ${LOG}
+    ${ECHO} "  * ${cc_yellow}CentOS${cc_normal}" | ${TEE} ${LOG}
+    ${ECHO} | ${TEE} ${LOG}
+    ${ECHO} -n " > " | ${TEE} ${LOG}
+    read replyos
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_yellow}replyos: ${cc_green}${replyos}${cc_normal}" | ${TEE} ${LOG}
+    fi
+    if [ -z "${replyos}" ]; then
+      ${ECHO} "${cc_red}No valid OS was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
+      exit 1
+    else
+      OS=${replyos}
+    fi
+    eval_os ${OS}
+    validos=$?
+    if [ ${validos} -eq 0 ]; then
+      ${ECHO} "${cc_red}No valid OS was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
+      exit 1
+    fi
+  fi
+  if [ -z "${OSVERSION}" ]; then
+    foundosversion=0
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_yellow}OS version not found${cc_normal}" | ${TEE} ${LOG}
+    fi
+    eval_issue_osversion ${TEMPOS}
+    foundosversion=$?
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_yellow}foundosversion: ${cc_green}${foundosversion}${cc_normal}" | ${TEE} ${LOG}
+    fi
+  else
+    foundosversion=1
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_green}OS version found: ${foundosversion}${cc_normal}" | ${TEE} ${LOG}
+    fi
+  fi
+  if [ ${foundosversion} -eq 1 ]; then
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_green}foundosversion is true${cc_normal}" | ${TEE} ${LOG}
+    fi
+    eval_osversion ${OS}
+    validosversion=$?
+    if [ ${validosversion} -eq 0 ]; then
+      if [ ${VERBOSE} -gt 1 ]; then
+        ${ECHO} "${cc_red}invalid OS found: ${cc_yellow}${OSVERSION}${cc_normal}" | ${TEE} ${LOG}
+      fi
+      foundosversion=0
+    fi
+  fi
+  if [ ${foundosversion} -eq 0 ]; then
+    ${ECHO} " ${cc_blue}Please provide a valid OS Version for ${OS} for this script." | ${TEE} ${LOG}
+    ${ECHO} " Valid Versions are:" | ${TEE} ${LOG}
+    ${ECHO} | ${TEE} ${LOG}
+    case ${OS} in
+      ubuntu)
+        ${ECHO} "  * ${cc_yellow}12.04${cc_blue}" | ${TEE} ${LOG}
+        ;;
+      centos)
+        ${ECHO} "  * ${cc_yellow}6${cc_normal}" | ${TEE} ${LOG}
+        ;;
+    esac
+    ${ECHO} | ${TEE} ${LOG}
+    ${ECHO} -n " > " | ${TEE} ${LOG}
+    read replyosversion
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${cc_yellow}replyosversion: ${cc_green}${replyosversion}${cc_normal}" | ${TEE} ${LOG}
+    fi
+    if [ -z "${replyosversion}" ]; then
+      ${ECHO} "${cc_red}No valid OS version was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
+      exit 1
+    else
+      OSVERSION=${replyosversion}
+    fi
+    eval_osversion ${OSVERSION}
+    validosversion=$?
+    if [ ${validosversion} -eq 0 ]; then
+      ${ECHO} "${cc_red}No valid OS version was given. Exiting now.${cc_normal}" | ${TEE} ${LOG}
+      exit 1
+    fi
+  fi
+}
 
 # Now some OS specific definitions
-case ${OS} in
-  ubuntu)
-    REPOPATH="apt.puppetlabs.com"
-    REPOFILEBASE="puppetlabs-release"
-    REPOFILE="${REPOFILEBASE}-precise.deb"
-    REPOINSTALL="dpkg -i"
-    REPOCHECK="dpkg --list"
-    REPOINSTCHECK="ii  "
-    REPOSEXEC="apt-get"
-    REPOUPDATE="${REPOSEXEC} update"
-    PKGINSTALL="${REPOSEXEC} install -y"
-    BASEPACKAGES=("puppet-common" "git-core")
-    ;;
-  Debian) # TODO: extract common values out of case
-    REPOPATH="apt.puppetlabs.com"
-    REPOFILEBASE="puppetlabs-release"
-    case "${OSVERSION}" in
-      6.0)
-      REPOFILE="${REPOFILEBASE}-squeeze.deb"
+set_OS-specific_variables() {
+  case ${OS} in
+    ubuntu)
+      REPOPATH="apt.puppetlabs.com"
+      REPOFILEBASE="puppetlabs-release"
+      REPOFILE="${REPOFILEBASE}-precise.deb"
+      REPOINSTALL="dpkg -i"
+      REPOCHECK="dpkg --list"
+      REPOINSTCHECK="ii  "
+      REPOSEXEC="apt-get"
+      REPOUPDATE="${REPOSEXEC} update"
+      PKGINSTALL="${REPOSEXEC} install -y"
+      BASEPACKAGES=("puppet-common" "git-core")
       ;;
-      7.0)
-      REPOFILE="${REPOFILEBASE}-wheezy.deb"
+    Debian) # TODO: extract common values out of case
+      REPOPATH="apt.puppetlabs.com"
+      REPOFILEBASE="puppetlabs-release"
+      case "${OSVERSION}" in
+        6.0)
+        REPOFILE="${REPOFILEBASE}-squeeze.deb"
+        ;;
+        7.0)
+        REPOFILE="${REPOFILEBASE}-wheezy.deb"
+        ;;
+      esac
+      REPOINSTALL="dpkg -i"
+      REPOCHECK="dpkg --list"
+      REPOINSTCHECK="ii  "
+      REPOSEXEC="apt-get"
+      REPOUPDATE="${REPOSEXEC} update"
+      PKGINSTALL="${REPOSEXEC} install -y"
+      BASEPACKAGES=("puppet-common" "git-core")
       ;;
-    esac
-    REPOINSTALL="dpkg -i"
-    REPOCHECK="dpkg --list"
-    REPOINSTCHECK="ii  "
-    REPOSEXEC="apt-get"
-    REPOUPDATE="${REPOSEXEC} update"
-    PKGINSTALL="${REPOSEXEC} install -y"
-    BASEPACKAGES=("puppet-common" "git-core")
+    *)
+      # Final fallback
+      ${ECHO} "${cc_red}${OS} not supported. Exiting!${cc_normal}" | ${TEE} ${LOG}
+      exit 1
     ;;
-  *)
-    # Final fallback
-    ${ECHO} "${cc_red}${OS} not supported. Exiting!${cc_normal}" | ${TEE} ${LOG}
-    exit 1
-  ;;
-esac
+  esac
+}
 
 repo_check ()
 {
@@ -558,12 +570,87 @@ prepare_curl () {
   fi
 }
 
-print_params ${LOG}
+puppetlabs_repo_setup() {
+  if [ ${VERBOSE} -lt 1 ]; then
+    silent="-s -S"
+  fi
+  if [ ! -e "${REPOFILE}" ]; then
+    prepare_curl
+    dl="${CURL} ${silent} -o /tmp/${REPOFILE} http://${REPOPATH}/${REPOFILE}"
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${dl}" | ${TEE} ${LOG}
+    fi
+    if [ ${VERBOSE} -gt 0 ]; then
+      ${dl} &>1 | ${TEE} ${LOG}
+    else
+      ${dl} >> ${LOG}
+    fi
+  else
+    ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${REPOFILE}${cc_green} already exists${cc_normal}" | ${TEE} ${LOG}
+  fi
+  repo_check ${REPOFILEBASE}
+  if [ "$?" -gt 0 ]; then
+    rinstall="${REPOINSTALL} /tmp/${REPOFILE}"
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${rinstall}" | ${TEE} ${LOG}
+    fi
+    if [ ${VERBOSE} -gt 0 ]; then
+      ${rinstall} &>1 | ${TEE} ${LOG}
+    else
+      ${rinstall} >> ${LOG}
+    fi
+  else
+    ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${REPOFILEBASE}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
+  fi
+}
 
+log_section_end() {
+  ${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
+  ${ECHO} | ${TEE} ${LOG}
+}
+
+get_puppet_config_from_git() {
+  if [ "${PUPPETDIR}" == "${SCRIPTDIR}/${TEMPPUPPETDIR}" ]; then
+    if [ ! -e "${PUPPETDIR}/.git" ]; then
+      if [ ${VERBOSE} -gt 0 ]; then
+        ${ECHO} " ${cc_blue}Puppet dir ${cc_yellow}${PUPPETDIR}${cc_blue} already exists. Removing now.${cc_normal}" | ${TEE} ${LOG}
+      fi
+      rm -rvf ${PUPPETDIR} >> ${LOG}
+    fi
+  fi
+  if [ ! -d "${TEMPPUPPETDIR}" ]; then
+    dlghrepo="git clone --progress ${GITHUBREPO} ${TEMPPUPPETDIR}"
+    if [ ${VERBOSE} -gt 1 ]; then
+      ${ECHO} "${dlghrepo}" | ${TEE} ${LOG}
+    fi
+    if [ ${VERBOSE} -gt 0 ]; then
+      ${dlghrepo} &>1 | ${TEE} ${LOG}
+    else
+      ${dlghrepo} &>> ${LOG}
+    fi
+  else
+    ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${GITHUBREPO}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
+  fi
+}
+
+######### End of function definition section ############
+
+################## Bootstrap script #####################
+# Check the parameters
+check_params_validity
+# Initialize log
+init_log
+# Grab information from /etc/issue
+parse_issue_for_OS_info
+# Make sure we have all answers. Otherwise ask the user for input on missing information
+get_missing_params
+# Now some OS specific definitions
+set_OS-specific_variables
+
+print_params ${LOG}
 if [ ${VERBOSE} -gt 0 ]; then
   print_params
 fi
-
 read -t 10 -p "Press Enter or wait 10 secs to continue..."; ${ECHO}
 
 # Enter the required directory and get started
@@ -571,39 +658,8 @@ cd $SCRIPTDIR
 
 # Configure Puppetlabs repo
 ${ECHO} " ${cc_blue}Downloading ${cc_yellow}Puppetlabs${cc_blue} repository information...${cc_normal}" | ${TEE} ${LOG}
-if [ ${VERBOSE} -lt 1 ]; then
-  silent="-s -S"
-fi
-if [ ! -e "${REPOFILE}" ]; then
-  prepare_curl
-	dl="${CURL} ${silent} -o /tmp/${REPOFILE} http://${REPOPATH}/${REPOFILE}"
-	if [ ${VERBOSE} -gt 1 ]; then
-	  ${ECHO} "${dl}" | ${TEE} ${LOG}
-	fi
-	if [ ${VERBOSE} -gt 0 ]; then
-	  ${dl} &>1 | ${TEE} ${LOG}
-	else
-	  ${dl} >> ${LOG}
-	fi
-else
-  ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${REPOFILE}${cc_green} already exists${cc_normal}" | ${TEE} ${LOG}
-fi
-repo_check ${REPOFILEBASE}
-if [ "$?" -gt 0 ]; then
-	rinstall="${REPOINSTALL} /tmp/${REPOFILE}"
-	if [ ${VERBOSE} -gt 1 ]; then
-	  ${ECHO} "${rinstall}" | ${TEE} ${LOG}
-	fi
-	if [ ${VERBOSE} -gt 0 ]; then
-	  ${rinstall} &>1 | ${TEE} ${LOG}
-	else
-	  ${rinstall} >> ${LOG}
-	fi
-else
-  ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${REPOFILEBASE}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
-fi
-${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
-${ECHO} | ${TEE} ${LOG}
+puppetlabs_repo_setup
+log_section_end
 
 # Update the repository information
 apt_update
@@ -611,35 +667,12 @@ apt_update
 # Install a basic puppet master configuration
 ${ECHO} " ${cc_blue}Installing ${cc_yellow}${BASEPACKAGES[@]}${cc_blue}...${cc_normal}" | ${TEE} ${LOG}
 repo_install ${BASEPACKAGES}
-
-${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
-${ECHO} | ${TEE} ${LOG}
+log_section_end
 
 # Grab the GitHub puppet configuration
 ${ECHO} " ${cc_blue}Downloading puppet master configuration from ${cc_yellow}GitHub${cc_blue} for final provisioning...${cc_normal}" | ${TEE} ${LOG}
-if [ "${PUPPETDIR}" == "${SCRIPTDIR}/${TEMPPUPPETDIR}" ]; then
-  if [ ! -e "${PUPPETDIR}/.git" ]; then
-	  if [ ${VERBOSE} -gt 0 ]; then
-	    ${ECHO} " ${cc_blue}Puppet dir ${cc_yellow}${PUPPETDIR}${cc_blue} already exists. Removing now.${cc_normal}" | ${TEE} ${LOG}
-	  fi
-	  rm -rvf ${PUPPETDIR} >> ${LOG}
-  fi
-fi
-if [ ! -d "${TEMPPUPPETDIR}" ]; then
-	dlghrepo="git clone --progress ${GITHUBREPO} ${TEMPPUPPETDIR}"
-	if [ ${VERBOSE} -gt 1 ]; then
-	  ${ECHO} "${dlghrepo}" | ${TEE} ${LOG}
-	fi
-	if [ ${VERBOSE} -gt 0 ]; then
-	  ${dlghrepo} &>1 | ${TEE} ${LOG}
-	else
-	  ${dlghrepo} &>> ${LOG}
-	fi
-else
-  ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${GITHUBREPO}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
-fi
-${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
-${ECHO} | ${TEE} ${LOG}
+get_puppet_config_from_git
+log_section_end
 
 # Install Puppet master through puppet base installation
 ${ECHO} " ${cc_blue}Install ${cc_yellow}puppet master${cc_blue} through puppet base installation...${cc_normal}" | ${TEE} ${LOG}
@@ -654,8 +687,7 @@ if [ ${VERBOSE} -gt 0 ]; then
 else
   ${puppetize} >> ${LOG}
 fi
-${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
-${ECHO} | ${TEE} ${LOG}
+log_section_end
 
 calculate_exec_time
 

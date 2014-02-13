@@ -1,27 +1,18 @@
-node 'palladium.eqiad.wmnet' {
+node 'puppetmaster.asinet' {
     include passwords::puppet::database
-
-    include standard,
-        backup::client,
-        misc::management::ipmi,
-        role::salt::masters::production,
-        role::deployment::salt_masters::production
 
     class { puppetmaster:
         allow_from => [
-            '*.wikimedia.org',
-            '*.pmtpa.wmnet',
-            '*.eqiad.wmnet',
-            '*.ulsfo.wmnet',
+            '*.asi-soft.com',
+            '*.asinet',
          ],
-        server_type => 'frontend',
-        workers => ['palladium.eqiad.wmnet', 'strontium.eqiad.wmnet'],
+        server_type => 'standalone',
         config => {
-            'thin_storeconfigs' => true,
+            'thin_storeconfigs' => true, # only collects and stores to the database exported resources, tags and host facts
             'dbadapter' => 'mysql',
             'dbuser' => 'puppet',
             'dbpassword' => $passwords::puppet::database::puppet_production_db_pass,
-            'dbserver' => 'db1001.eqiad.wmnet',
+            'dbserver' => 'db1001.wmnet',
         }
     }
 }
