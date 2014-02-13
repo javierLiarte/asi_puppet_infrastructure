@@ -72,6 +72,12 @@ usage ()
   exit 1
 }
 
+# Check root is running the script
+if [ "$EUID" -ne "0" ]; then
+  echo "This script must be run as root." >&2
+  exit 1
+fi
+
 # Check the parameters
 while [ $# -gt 0 ]; do
   case "${1}" in
@@ -502,11 +508,63 @@ print_params ()
   fi
 }
 
+# Updates apt package information
+apt_update () {
+  ${ECHO} " ${cc_blue}Updaing ${cc_yellow}APT${cc_blue} with new information...${cc_normal}" | ${TEE} ${LOG}
+  if [ ${VERBOSE} -gt 1 ]; then
+    ${ECHO} "${REPOUPDATE}" | ${TEE} ${LOG}
+  fi
+  if [ ${VERBOSE} -gt 0 ]; then
+    ${REPOUPDATE} &>1 | ${TEE} ${LOG}
+  else
+    ${REPOUPDATE} >> ${LOG}
+  fi
+  ${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
+  ${ECHO} | ${TEE} ${LOG}
+}
+
+
+repo_install () {
+  bpc=${#BASEPACKAGES[@]}
+  bpi=0
+  while [ ${bpi} -lt ${bpc} ]; do
+    repo_check ${BASEPACKAGES[${bpi}]}
+    if [ "$?" -gt 0 ]; then
+      pkginst="${PKGINSTALL} ${BASEPACKAGES[${bpi}]}"
+      if [ ${VERBOSE} -gt 1 ]; then
+        ${ECHO} "${pkginst}" | ${TEE} ${LOG}
+      fi
+      if [ ${VERBOSE} -gt 0 ]; then
+        ${pkginst} &>1 | ${TEE} ${LOG}
+      else
+        ${pkginst} >> ${LOG}
+      fi
+    else
+      ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${BASEPACKAGES[${bpi}]}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
+    fi
+    ((bpi++))
+  done
+}
+
+
+# Checks if curl is available and install it if needed
+prepare_curl () {
+  if [ -n ${CURL} ]; then
+    return 0; # Curl is present
+  else
+    apt_update
+    packages=("puppet-common" "git-core")
+    repo_install ${packages}
+  fi
+}
+
 print_params ${LOG}
 
 if [ ${VERBOSE} -gt 0 ]; then
   print_params
 fi
+
+read -t 10 -p "Press Enter or wait 10 secs to continue..."; ${ECHO}
 
 # Enter the required directory and get started
 cd $SCRIPTDIR
@@ -517,6 +575,7 @@ if [ ${VERBOSE} -lt 1 ]; then
   silent="-s -S"
 fi
 if [ ! -e "${REPOFILE}" ]; then
+  prepare_curl
 	dl="${CURL} ${silent} -o /tmp/${REPOFILE} http://${REPOPATH}/${REPOFILE}"
 	if [ ${VERBOSE} -gt 1 ]; then
 	  ${ECHO} "${dl}" | ${TEE} ${LOG}
@@ -547,39 +606,12 @@ ${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
 ${ECHO} | ${TEE} ${LOG}
 
 # Update the repository information
-${ECHO} " ${cc_blue}Updaing ${cc_yellow}APT${cc_blue} with new information...${cc_normal}" | ${TEE} ${LOG}
-if [ ${VERBOSE} -gt 1 ]; then
-  ${ECHO} "${REPOUPDATE}" | ${TEE} ${LOG}
-fi
-if [ ${VERBOSE} -gt 0 ]; then
-  ${REPOUPDATE} &>1 | ${TEE} ${LOG}
-else
-  ${REPOUPDATE} >> ${LOG}
-fi
-${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
-${ECHO} | ${TEE} ${LOG}
+apt_update
 
 # Install a basic puppet master configuration
 ${ECHO} " ${cc_blue}Installing ${cc_yellow}${BASEPACKAGES[@]}${cc_blue}...${cc_normal}" | ${TEE} ${LOG}
-bpc=${#BASEPACKAGES[@]}
-bpi=0
-while [ ${bpi} -lt ${bpc} ]; do
-	repo_check ${BASEPACKAGES[${bpi}]}
-  if [ "$?" -gt 0 ]; then
-		pkginst="${PKGINSTALL} ${BASEPACKAGES[${bpi}]}"
-		if [ ${VERBOSE} -gt 1 ]; then
-		  ${ECHO} "${pkginst}" | ${TEE} ${LOG}
-		fi
-		if [ ${VERBOSE} -gt 0 ]; then
-		  ${pkginst} &>1 | ${TEE} ${LOG}
-		else
-		  ${pkginst} >> ${LOG}
-		fi
-  else
-    ${ECHO} " ${cc_green}Skipping since ${cc_yellow}${BASEPACKAGES[${bpi}]}${cc_green} is already installed${cc_normal}" | ${TEE} ${LOG}
-	fi
-	((bpi++))
-done
+repo_install ${BASEPACKAGES}
+
 ${ECHO} " ${cc_green}Done.${cc_normal}" | ${TEE} ${LOG}
 ${ECHO} | ${TEE} ${LOG}
 
