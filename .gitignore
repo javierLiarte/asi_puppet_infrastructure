@@ -1,0 +1,7 @@
+.tmp/
+.librarian
+Puppetfile.lock
+#modules/
+
+# vim backups
+*swp
