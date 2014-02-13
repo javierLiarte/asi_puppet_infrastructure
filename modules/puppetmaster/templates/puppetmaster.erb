@@ -1,0 +1,110 @@
+# This file is managed by Puppet!
+
+# Passenger configuration
+PassengerHighPerformance on
+PassengerMaxPoolSize <%= scope.lookupvar('::processorcount').to_i * 4 %>
+PassengerPoolIdleTime 1500
+PassengerMaxRequests 100
+PassengerStatThrottleRate 120
+PassengerUseGlobalQueue on
+RackAutoDetect Off
+RailsAutoDetect Off
+
+<%- if @server_type == 'frontend' or @server_type == 'standalone' -%>
+<VirtualHost <%= scope.lookupvar('puppetmaster::passenger::bind_address') %>:8140>
+	SSLEngine on
+	SSLProtocol -ALL +SSLv3 +TLSv1
+	SSLCipherSuite ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:-LOW:-SSLv2:-EXP
+
+	SSLCertificateFile      /var/lib/puppet/server/ssl/certs/<%= scope.lookupvar('puppetmaster::server_name') %>.pem
+	SSLCertificateKeyFile   /var/lib/puppet/server/ssl/private_keys/<%= scope.lookupvar('puppetmaster::server_name') %>.pem
+	SSLCACertificateFile    /var/lib/puppet/server/ssl/ca/ca_crt.pem
+	SSLCertificateChainFile /var/lib/puppet/server/ssl/ca/ca_crt.pem
+	# If Apache complains about invalid signatures on the CRL, you can try disabling
+	# CRL checking by commenting the next line, but this is not recommended.
+	SSLCARevocationPath     /var/lib/puppet/server/ssl/crl
+	SSLVerifyClient <%= scope.lookupvar('puppetmaster::passenger::verify_client') %>
+	SSLVerifyDepth  1
+	SSLOptions +StdEnvVars
+
+	<%- if @server_type == 'frontend' -%>
+	# These request headers are used to pass the client certificate
+	# authentication information on to the puppet master process
+	RequestHeader set X-SSL-Subject %{SSL_CLIENT_S_DN}e
+	RequestHeader set X-Client-DN %{SSL_CLIENT_S_DN}e
+	RequestHeader set X-Client-Verify %{SSL_CLIENT_VERIFY}e
+
+	SSLProxyEngine on
+	ProxyPassMatch ^/([^/]+/certificate.*)$ https://<%= @fqdn %>:8141
+	ProxyPassMatch ^/([^/]+/report/.*)$ https://<%= @fqdn %>:8141
+	ProxyPassMatch ^/([^/]+/file_bucket_file/md5/.*)$ https://<%= @fqdn %>:8141
+	ProxyPassMatch ^/([^/]+/file_metadata(s)?/volatile/.*)$ https://<%= @fqdn %>:8141
+	ProxyPass / balancer://mycluster/
+	<Proxy balancer://mycluster>
+	  <%- @workers.each do |worker| -%>
+		BalancerMember https://<%= worker %>:8141 connectiontimeout=1 retry=500 timeout=900
+	  <%- end -%>
+		Order allow,deny
+		Allow from all
+	</Proxy>
+	<%- else -%>
+	RackBaseURI /
+
+	<Location />
+		Order Allow,Deny
+		<%- scope.lookupvar('puppetmaster::passenger::allow_from').each do |entry| -%>
+		Allow from <%= entry.gsub(/^\*/, "") %>
+		<%- end -%>
+		<%- scope.lookupvar('puppetmaster::passenger::deny_from').each do |entry| -%>
+		Deny from <%= entry.gsub(/^\*/, "") %>
+		<%- end -%>
+	</Location>
+
+	DocumentRoot /usr/share/puppet/rack/puppetmasterd/public
+	<Directory /usr/share/puppet/rack/puppetmasterd/>
+		Options None
+		AllowOverride None
+		Order allow,deny
+		allow from all
+	</Directory>
+	<%- end -%>
+
+	LogFormat "%h %l %u %{%Y-%m-%d %H:%M:%S}t \"%r\" %>s %O %D \"%{Referer}i\" \"%{User-Agent}i\"" puppetmaster
+	CustomLog /var/log/apache2/puppetmaster.log puppetmaster
+</VirtualHost>
+<%- end -%>
+
+<%- if @server_type == 'frontend' or @server_type == 'backend' -%>
+<VirtualHost <%= scope.lookupvar('puppetmaster::passenger::bind_address') %>:8141>
+	SSLEngine on
+	SSLProtocol -ALL +SSLv3 +TLSv1
+	SSLCipherSuite ALL:!ADH:RC4+RSA:+HIGH:+MEDIUM:-LOW:-SSLv2:-EXP
+
+	SSLCertificateFile      /var/lib/puppet/ssl/certs/<%= @fqdn %>.pem
+	SSLCertificateKeyFile   /var/lib/puppet/ssl/private_keys/<%= @fqdn %>.pem
+	SSLCACertificateFile    /var/lib/puppet/ssl/certs/ca.pem
+	SSLCertificateChainFile /var/lib/puppet/ssl/certs/ca.pem
+	RackBaseURI /
+
+	<Location />
+		Order Allow,Deny
+		<%- scope.lookupvar('puppetmaster::passenger::allow_from').each do |entry| -%>
+		Allow from <%= entry.gsub(/^\*/, "") %>
+		<%- end -%>
+		<%- scope.lookupvar('puppetmaster::passenger::deny_from').each do |entry| -%>
+		Deny from <%= entry.gsub(/^\*/, "") %>
+		<%- end -%>
+	</Location>
+
+	DocumentRoot /usr/share/puppet/rack/puppetmasterd/public
+	<Directory /usr/share/puppet/rack/puppetmasterd/>
+		Options None
+		AllowOverride None
+		Order allow,deny
+		allow from all
+	</Directory>
+
+	LogFormat "%h %l %u %{%Y-%m-%d %H:%M:%S}t \"%r\" %>s %O %D \"%{Referer}i\" \"%{User-Agent}i\"" puppetmaster
+	CustomLog /var/log/apache2/puppetmaster-backend.log puppetmaster
+</VirtualHost>
+<%- end -%>
