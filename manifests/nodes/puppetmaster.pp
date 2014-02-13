@@ -1,6 +1,15 @@
 node 'puppetmaster.asinet' {
     include passwords::puppet::database
 
+    class { '::mysql::server':
+        root_password => 'secretpass',
+        override_options => { 
+            'mysqld' => { 
+                'max_connections' => '600',
+                'query_cache_size' => '64M'
+            }
+        }
+    }
     class { puppetmaster:
         allow_from => [
             '*.asi-soft.com',
@@ -12,7 +21,7 @@ node 'puppetmaster.asinet' {
             'dbadapter' => 'mysql',
             'dbuser' => 'puppet',
             'dbpassword' => $passwords::puppet::database::puppet_production_db_pass,
-            'dbserver' => 'db1001.wmnet',
+            'dbserver' => 'puppetmaster.wmnet',
         }
     }
 }
