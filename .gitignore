@@ -4,5 +4,7 @@ Puppetfile.lock
 !modules/puppetmaster
 modules/*
 
+manifests/passwords.pp
+
 # vim backups
 *swp
