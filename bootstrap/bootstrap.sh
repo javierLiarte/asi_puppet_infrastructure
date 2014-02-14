@@ -21,6 +21,8 @@ GREP=`which grep`
 DATE=`which date`
 ECHO="echo -e"
 
+export CAT
+
 # Some usage feedback
 ${ECHO}
 ${ECHO} "${cc_blue}#####################################################${cc_normal}"
@@ -201,7 +203,7 @@ eval_issue_osversion ()
         fi
         ;;
       Debian)
-        OSVERSION="${2:0:3}"
+        OSVERSION="${2:0:1}"
         if [ ${VERBOSE} -gt 1 ]; then
           ${ECHO} "${cc_yellow}version \$3: ${3}${cc_normal}" | ${TEE} ${LOG}
         fi
@@ -266,10 +268,10 @@ eval_osversion ()
     ;;
     Debian)
     case "${OSVERSION}" in
-      6.0)
+      6)
       # good
       ;;
-      7.0)
+      7)
       # good
       ;;
       *)
@@ -637,7 +639,7 @@ get_puppet_config_from_git() {
 
 ################## Bootstrap script #####################
 # Check the parameters
-check_params_validity
+check_params_validity "$@"
 # Initialize log
 init_log
 # Grab information from /etc/issue
@@ -678,7 +680,7 @@ log_section_end
 ${ECHO} " ${cc_blue}Install ${cc_yellow}puppet master${cc_blue} through puppet base installation...${cc_normal}" | ${TEE} ${LOG}
 PUPPET=`which puppet`
 #puppetize="${PUPPET} apply --modulepath=${SCRIPTDIR}/${TEMPPUPPETDIR}/modules ${SCRIPTDIR}/${TEMPPUPPETDIR}/${PUPPETINSTALLCONFIG}"
-puppetize="${PUPPET} apply --modulepath=${SCRIPTDIR}/${TEMPPUPPETDIR}/modules ${SCRIPTDIR}/manifests/site.pp"
+puppetize="${PUPPET} apply --modulepath=${SCRIPTDIR}/${TEMPPUPPETDIR}/modules ${SCRIPTDIR}/${TEMPPUPPETDIR}/manifests/site.pp"
 if [ ${VERBOSE} -gt 1 ]; then
   ${ECHO} "${puppetize}" | ${TEE} ${LOG}
 fi

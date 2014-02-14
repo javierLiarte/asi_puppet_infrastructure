@@ -1,4 +1,4 @@
-node 'puppetmaster.asinet' {
+node 'puppetmaster.asi-soft.com' {
     include passwords::puppet::database
 
     class { '::mysql::server':

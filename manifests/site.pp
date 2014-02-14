@@ -8,6 +8,8 @@
 # - https://github.com/berndmweber/open-source-puppet-master
 # - https://gerrit.wikimedia.org/r/p/operations/puppet
 
+import "passwords.pp"
+
 # Import node definitions:
 import 'nodes/*.pp'
 
