@@ -10,6 +10,25 @@
 
 import "passwords.pp"
 
+import "generic-definitions.pp"
+
+
+# Class for *most* servers, standard includes
+class standard {
+    include base
+    #,
+    #    ganglia,
+    #    ntp::client,
+    #    exim::simple-mail-sender
+}
+
+#class standard-noexim {
+#    include base,
+#        ganglia,
+#        ntp::client
+#}
+
+
 # Import node definitions:
 import 'nodes/*.pp'
 

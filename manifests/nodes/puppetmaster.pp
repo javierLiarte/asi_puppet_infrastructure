@@ -1,6 +1,8 @@
 node 'puppetmaster.asi-soft.com' {
     include passwords::puppet::database
 
+    include standard
+
     class { '::mysql::server':
         root_password => 'secretpass',
         override_options => { 
