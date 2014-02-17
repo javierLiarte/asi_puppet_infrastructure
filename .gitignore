@@ -1,10 +1,10 @@
 .tmp/
 .librarian
 Puppetfile.lock
+modules/*
 !modules/puppetmaster
 !modules/base
 !modules/ssh
-modules/*
 
 manifests/passwords.pp
 
