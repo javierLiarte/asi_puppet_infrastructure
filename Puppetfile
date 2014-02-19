@@ -7,6 +7,9 @@ mod 'puppetlabs/stdlib'
 mod 'puppetlabs/mysql'
 mod 'puppetlabs/apache'
 
+mod 'puppet-openswan',
+  :git => 'git://github.com/fup/puppet-openswan.git'
+
 # mod 'puppetlabs/stdlib'
 
 # mod 'ntp',
