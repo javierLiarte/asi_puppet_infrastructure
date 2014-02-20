@@ -11,6 +11,8 @@
 import "passwords.pp"
 
 import "generic-definitions.pp"
+import "profile/*.pp"
+
 
 
 # Class for *most* servers, standard includes

@@ -4,7 +4,7 @@ node 'puppetmaster.asi-soft.com' {
     include standard
 
     class { '::mysql::server':
-        root_password => 'secretpass',
+        root_password => $passwords::mysql::root_pwd,
         override_options => { 
             'mysqld' => { 
                 'max_connections' => '600',
@@ -23,7 +23,7 @@ node 'puppetmaster.asi-soft.com' {
             'dbadapter' => 'mysql',
             'dbuser' => 'puppet',
             'dbpassword' => $passwords::puppet::database::puppet_production_db_pass,
-            'dbserver' => 'puppetmaster.wmnet',
+            'dbserver' => 'puppetmaster.asinet',
         }
     }
 }

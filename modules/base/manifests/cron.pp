@@ -2,7 +2,7 @@
 #
 # Base module manifest for cron service
 
-class cron {
+class base::cron {
 	   package { "cron":
 	    ensure => installed,
 	  }

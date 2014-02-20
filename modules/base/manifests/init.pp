@@ -186,15 +186,15 @@ class base::puppet($server='puppet', $certname=undef) {
 
 class base {
 
-    include apt
-    include apt::update
-
-    if ($::realm == 'labs') {
-        include apt::unattendedupgrades,
-            apt::noupgrade
-    }
-
-    include base::tcptweaks
+#    include apt
+#    include apt::update
+#
+#    if ($::realm == 'labs') {
+#        include apt::unattendedupgrades,
+#            apt::noupgrade
+#    }
+#
+#    include base::tcptweaks
 
     file { '/usr/local/sbin':
         ensure => directory,
@@ -221,7 +221,7 @@ class base {
     }
 
     include passwords::root,
-        base::cron
+        base::cron,
 #        base::decommissioned,
 #        base::grub,
 #        base::resolving,
@@ -235,19 +235,19 @@ class base {
 #        base::access::dc-techs,
 #        base::screenconfig,
         ssh::client,
-        ssh::server,
+        ssh::server
 #        role::salt::minions
 
 
     # include base::monitor::host.
     # if $nagios_contact_group is set, then use it
     # as the monitor host's contact group.
-    class { 'base::monitoring::host':
-        contact_group => $::nagios_contact_group ? {
-            undef     => 'admins',
-            default   => $::nagios_contact_group,
-        }
-    }
+#    class { 'base::monitoring::host':
+#        contact_group => $::nagios_contact_group ? {
+#            undef     => 'admins',
+#            default   => $::nagios_contact_group,
+#        }
+#    }
 
     if $::realm == 'labs' {
         include base::instance-upstarts,
