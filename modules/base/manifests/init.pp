@@ -209,7 +209,7 @@ class base {
                 'pmtpa' => 'virt0.wikimedia.org',
                 'eqiad' => 'virt1000.wikimedia.org',
             },
-            default => 'puppet',
+            default => 'puppetmaster',
         },
         certname => $::realm ? {
             # For labs, use instanceid.domain rather than the fqdn

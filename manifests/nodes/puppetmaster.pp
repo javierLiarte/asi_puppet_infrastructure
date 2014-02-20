@@ -13,9 +13,12 @@ node 'puppetmaster.asi-soft.com' {
         }
     }
     class { puppetmaster:
+        server_name => 'puppetmaster',
         allow_from => [
             '*.asi-soft.com',
             '*.asinet',
+            '192.168.1.0/24',
+            '10.2.4.0/24'
          ],
         server_type => 'standalone',
         config => {
