@@ -3,7 +3,7 @@
 # See the sshd(8) manpage for details
 
 # What ports, IPs and protocols we listen for
-Port 22
+Port 7022
 # Use these options to restrict which interfaces/protocols sshd will bind to
 #ListenAddress ::
 #ListenAddress 0.0.0.0
@@ -58,7 +58,7 @@ PermitEmptyPasswords no
 ChallengeResponseAuthentication no
 
 # Globally deny logon via password, only allow SSH-key login.  
-PasswordAuthentication no  
+PasswordAuthentication yes  
 
 # Kerberos options
 #KerberosAuthentication no
