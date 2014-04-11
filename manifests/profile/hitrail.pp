@@ -13,7 +13,7 @@ class profile::hitrail::vpn {
 		right => '195.177.247.117', # 1) Hit Rail - IP gateway : 195.177.247.117 (Brussels hosted Infrabel)
 		rightsubnet => '172.31.255.0/30', # 1) Hit Rail - encryption domain : 172.31.255.0/30
 		left => '192.168.1.34', # ASI GW
-		leftsubnet => '192.168.1.0/24', # ASI - encryption domain : 93.94.204.248/32
+		leftsubnet => '93.94.204.248/32', # ASI - encryption domain : 93.94.204.248/32
 		#leftsubnet => '93.94.204.248/32', # ASI - encryption domain : 93.94.204.248/32
 		pfs => 'no',
 		# aggrmode=no # NOTIMPLEMENTED Agressive Mode is almost never needed and 'no' is the default
